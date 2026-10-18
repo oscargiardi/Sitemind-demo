@@ -734,9 +734,9 @@ function RoomSwitch() {
   );
 }
 
-export default function ActivityScene() {
+export default function ActivityScene({ active = true }: { active?: boolean }) {
   return (
-    <Canvas orthographic shadows dpr={[1, 2]} camera={{ position: [20, 18, 20], zoom: 60, near: 0.1, far: 200 }} gl={{ antialias: true, alpha: true }}>
+    <Canvas frameloop={active ? 'always' : 'never'} orthographic shadows dpr={[1, 2]} camera={{ position: [20, 18, 20], zoom: 60, near: 0.1, far: 200 }} gl={{ antialias: true, alpha: true }}>
       <Lights shadowSize={8} target={[0, 0, 0]} />
       <FitOrtho target={[0.45, 0.7, 0.1]} dir={[1, 1.3, 1.15]} fitW={10.1} fitH={10.5} sway={0.06} swaySpeed={0.12} />
       <RoomSwitch />

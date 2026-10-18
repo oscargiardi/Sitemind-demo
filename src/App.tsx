@@ -2,6 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { clock, sim, useClock } from './sim/clock';
 import {
   BREACH,
+  HVAC,
+  isHvac,
   PPE,
   DURATION,
   FLOOR,
@@ -17,10 +19,13 @@ import {
   type RoomId,
 } from './sim/timeline';
 import SiteMindApp from './ui/SiteMindApp';
+import { capturedFraction } from './three/HvacScene';
 import { I, Logo } from './ui/icons';
 
 const SiteScene = lazy(() => import('./three/SiteScene'));
 const ActivityScene = lazy(() => import('./three/ActivityScene'));
+const HvacOverview = lazy(() => import('./three/HvacScene').then((m) => ({ default: m.HvacOverview })));
+const HvacPov = lazy(() => import('./three/HvacScene').then((m) => ({ default: m.HvacPov })));
 
 export default function App() {
   const root = useRef<HTMLDivElement>(null);
@@ -93,16 +98,20 @@ export default function App() {
       <div className="stage" style={{ width: stage.w, height: stage.h, fontSize: stage.w / 120 }}>
         <div className="panels">
           <section className="panel panel-site" aria-label="Connected construction site">
-            <Suspense fallback={<div className="loading">Loading site…</div>}>
-              <SiteScene />
-            </Suspense>
+            <SceneLayers
+              main={(active) => <SiteScene active={active} />}
+              hvac={(active) => <HvacOverview active={active} />}
+              fallback="Loading site…"
+            />
             <SiteHud />
           </section>
           <section className="panel panel-activity" aria-label="Live construction activity">
             <ActivityBackdrop />
-            <Suspense fallback={<div className="loading">Loading camera…</div>}>
-              <ActivityScene />
-            </Suspense>
+            <SceneLayers
+              main={(active) => <ActivityScene active={active} />}
+              hvac={(active) => <HvacPov active={active} />}
+              fallback="Loading camera…"
+            />
             <ActivityHud />
           </section>
           <section className="panel panel-os" aria-label="SiteMind software">
@@ -118,7 +127,62 @@ export default function App() {
 }
 
 /* ------------------------------------------------------------------ */
+/** keeps both canvases mounted; only the visible one renders frames */
+function SceneLayers({
+  main,
+  hvac,
+  fallback,
+}: {
+  main: (active: boolean) => React.ReactNode;
+  hvac: (active: boolean) => React.ReactNode;
+  fallback: string;
+}) {
+  const { t } = useClock();
+  const h = isHvac(t);
+  return (
+    <>
+      <div className="layer" style={{ visibility: h ? 'hidden' : 'visible' }}>
+        <Suspense fallback={<div className="loading">{fallback}</div>}>{main(!h)}</Suspense>
+      </div>
+      <div className="layer" style={{ visibility: h ? 'visible' : 'hidden' }}>
+        <Suspense fallback={null}>{hvac(h)}</Suspense>
+      </div>
+    </>
+  );
+}
+
+/** fade-through-black amount at scene switches */
+function fadeAt(t: number, edges: number[]) {
+  let fade = 0;
+  for (const e of edges) fade = Math.max(fade, 1 - Math.abs(t - e) / 0.55);
+  fade = Math.max(fade, 1 - t / 0.6, 1 - (DURATION - t) / 0.6);
+  return Math.max(0, Math.min(1, fade));
+}
+
 function SiteHud() {
+  const { t } = useClock();
+  const fade = fadeAt(t, [HVAC.start]);
+  if (isHvac(t)) {
+    const pct = Math.round(capturedFraction(t) * 100);
+    return (
+      <div className="hud hud-site">
+        <div className="hud-tl">
+          <div className="hud-chip">
+            <span className="live-dot" /> Level 5 · Room 5.04 · Spatial capture
+          </div>
+          <div className="hud-loc">Ceiling model {pct}%</div>
+        </div>
+        <div className="hud-bl">
+          <div className="legend">
+            <span><I.wearable /> Helmet cam H-27 (front + rear)</span>
+            <span><I.camera /> 2 ceiling cameras</span>
+            <span><I.sensor /> LiDAR S5-2</span>
+          </div>
+        </div>
+        <div className="fade" style={{ opacity: fade }} />
+      </div>
+    );
+  }
   return (
     <div className="hud hud-site">
       <div className="hud-tl">
@@ -134,13 +198,14 @@ function SiteHud() {
           <span><I.wearable /> 31 wearables</span>
         </div>
       </div>
+      <div className="fade" style={{ opacity: fade }} />
     </div>
   );
 }
 
 function ActivityBackdrop() {
   const { t } = useClock();
-  return <div className={`backdrop ${roomAt(t) === 'breach' ? 'sky' : 'interior'}`} />;
+  return <div className={`backdrop ${roomAt(t) === 'breach' && !isHvac(t) ? 'sky' : 'interior'}`} />;
 }
 
 const ROOM_INFO: Record<RoomId, { cam: string; where: string }> = {
@@ -152,16 +217,14 @@ const ROOM_INFO: Record<RoomId, { cam: string; where: string }> = {
 function ActivityHud() {
   const { t } = useClock();
   const room = roomAt(t);
-  const info = ROOM_INFO[room];
+  const hvac = isHvac(t);
+  const info = hvac ? { cam: 'HELMET CAM H-27', where: 'Level 5 · Room 5.04' } : ROOM_INFO[room];
   // fade through black around room switches and the loop point
-  const edges = [ROOM_SWITCH.trip, ROOM_SWITCH.floor];
-  let fade = 0;
-  for (const e of edges) fade = Math.max(fade, 1 - Math.abs(t - e) / 0.55);
-  fade = Math.max(fade, 1 - t / 0.6, 1 - (DURATION - t) / 0.6);
-  fade = Math.max(0, Math.min(1, fade));
+  const fade = fadeAt(t, [ROOM_SWITCH.trip, ROOM_SWITCH.floor, HVAC.start]);
 
   let caption: { text: string; tone: string } | null = null;
-  if (room === 'breach') {
+  if (hvac) caption = { text: hvacTask(t), tone: 'neutral' };
+  else if (room === 'breach') {
     if (t >= BREACH.cross && t < BREACH.exitCross) caption = { text: 'Person entered exclusion zone', tone: 'critical' };
     else if (t >= BREACH.exitCross) caption = { text: 'Zone clear', tone: 'success' };
     else if (t >= PPE.detect) caption = { text: 'Worker without hard hat', tone: 'warning' };
@@ -184,7 +247,7 @@ function ActivityHud() {
         </div>
       </div>
       <div className="hud-bottom">
-        {room === 'floor' ? (
+        {room === 'floor' && !hvac ? (
           <div className={`progress-card ${p >= 100 ? 'done' : ''}`}>
             <div className="pc-top">
               <span>Timber flooring</span>
@@ -204,12 +267,23 @@ function ActivityHud() {
           caption && <div className={`caption tone-${caption.tone}`}>{caption.text}</div>
         )}
       </div>
+      {hvac && <div className="helmet-frame" />}
       <div className="fade" style={{ opacity: fade }}>
         {fade > 0.2 && t > 1 && t < DURATION - 1 && <span>{info.where}</span>}
       </div>
       <div className="scanlines" />
     </div>
   );
+}
+
+function hvacTask(t: number) {
+  if (t < HVAC.hangerA[0]) return 'Scanning ceiling void and existing services';
+  if (t < HVAC.hangerB[1]) return 'Installing M10 drop rods and trapeze';
+  if (t < HVAC.duct[0] + 3.4) return 'Lifting duct section into place';
+  if (t < HVAC.duct[1]) return 'Joining TDC flange';
+  if (t < HVAC.spigot[1]) return 'Fitting spigot, damper and flexible duct';
+  if (t < HVAC.insulation[1]) return 'Wrapping duct insulation';
+  return 'Ceiling void captured';
 }
 
 /** physical-world → software transmission travelling along the rail below the panels */
@@ -264,6 +338,7 @@ const MARKERS = [
   { t: BREACH.cross, sev: 'critical' as const, label: 'Exclusion zone breach' },
   { t: TRIP.detect, sev: 'warning' as const, label: 'Trip hazard' },
   { t: FLOOR.complete, sev: 'success' as const, label: 'Flooring complete' },
+  { t: HVAC.start, sev: 'info' as const, label: 'HVAC spatial capture' },
 ];
 
 function Controls({ isFs, toggleFs }: { isFs: boolean; toggleFs: () => void }) {

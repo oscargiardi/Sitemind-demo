@@ -707,9 +707,9 @@ function SiteWorld() {
   );
 }
 
-export default function SiteScene() {
+export default function SiteScene({ active = true }: { active?: boolean }) {
   return (
-    <Canvas orthographic shadows dpr={[1, 2]} camera={{ position: [20, 18, 20], zoom: 40, near: 0.1, far: 200 }} gl={{ antialias: true, alpha: true }}>
+    <Canvas frameloop={active ? 'always' : 'never'} orthographic shadows dpr={[1, 2]} camera={{ position: [20, 18, 20], zoom: 40, near: 0.1, far: 200 }} gl={{ antialias: true, alpha: true }}>
       <SiteWorld />
     </Canvas>
   );

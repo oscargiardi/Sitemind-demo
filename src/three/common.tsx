@@ -149,7 +149,7 @@ export const lerpAngle = (a: number, b: number, k: number) => {
 /* ------------------------------------------------------------------ */
 /* cartoon worker                                                      */
 /* ------------------------------------------------------------------ */
-export type Mode = 'idle' | 'walk' | 'carry' | 'kneel' | 'work' | 'bend' | 'look';
+export type Mode = 'idle' | 'walk' | 'carry' | 'kneel' | 'work' | 'bend' | 'look' | 'reach';
 export type Pose = {
   x: number;
   z: number;
@@ -234,6 +234,11 @@ export function Worker({
         aR = -1.6 - Math.abs(Math.sin(sim.wall * 6)) * 0.9;
         aL = -0.5;
         tilt = 0.12;
+        break;
+      case 'reach':
+        aL = -2.85 + Math.sin(sim.wall * 3) * 0.08;
+        aR = -2.85 - Math.sin(sim.wall * 3) * 0.08;
+        headY = 0;
         break;
       case 'bend':
         tilt = 0.7;

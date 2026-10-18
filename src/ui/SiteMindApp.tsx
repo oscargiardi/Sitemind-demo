@@ -13,10 +13,14 @@ import {
   floorProgress,
   programmeProgress,
   roomAt,
+  CAPTURE_LOG,
+  HVAC,
+  isHvac,
   type SiteEvent,
   type Severity,
 } from '../sim/timeline';
 import { I, Logo } from './icons';
+import { capturedFraction } from '../three/HvacScene';
 
 const NAV = [
   { id: 'overview', label: 'Overview', icon: I.overview },
@@ -34,7 +38,7 @@ const sevIcon = (s: Severity) => (s === 'critical' || s === 'warning' ? I.alert 
 
 export default function SiteMindApp() {
   const { t } = useClock();
-  const view = t >= FLOOR.navigate ? 'programme' : 'live';
+  const view = isHvac(t) ? 'capture' : t >= FLOOR.navigate ? 'programme' : 'live';
   const received = EVENTS.filter((e) => e.t <= t).sort((a, b) => b.t - a.t);
   const unread = EVENTS.filter((e) => e.t > 0 && e.t <= t && e.t > t - 14).length;
   const pulse = EVENTS.some((e) => e.t > 0 && t >= e.t && t < e.t + 1.2);
@@ -69,7 +73,7 @@ export default function SiteMindApp() {
           <div className="app-body">
             <nav className="sidebar" aria-label="SiteMind navigation">
               {NAV.map((n) => {
-                const active = (view === 'live' && n.id === 'live') || (view === 'programme' && n.id === 'programme');
+                const active = (view !== 'programme' && n.id === 'live') || (view === 'programme' && n.id === 'programme');
                 return (
                   <div key={n.id} className={`nav-item ${active ? 'active' : ''}`} data-cursor={`nav-${n.id}`}>
                     <n.icon />
@@ -84,7 +88,11 @@ export default function SiteMindApp() {
               </div>
             </nav>
             <main className="main">
-              {view === 'live' ? (
+              {view === 'capture' ? (
+                <div key="cap" className="view view-in">
+                  <CaptureView t={t} />
+                </div>
+              ) : view === 'live' ? (
                 <div key="live" className="view view-in">
                   <LiveView t={t} received={received} />
                 </div>
@@ -457,7 +465,7 @@ const CURSOR: CK[] = [
   { t: 64.9, at: 'open-programme', click: true },
   { t: 65.6, at: 'open-programme' },
   { t: 67.0, at: [0.9, 0.86] },
-  { t: 75, at: [0.78, 0.9] },
+  { t: 95, at: [0.78, 0.9] },
 ];
 const CLICKS = [BREACH.ackClick, TRIP.assignClick, FLOOR.navClick];
 
@@ -517,5 +525,86 @@ function Cursor() {
         <path d="M4 2.5l15.5 9.2-6.6 1.5 3.9 7.3-2.7 1.4-3.9-7.3L5.4 19z" fill="#fff" stroke="#111" strokeWidth="1.3" strokeLinejoin="round" />
       </svg>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Spatial capture: plain-language record of what the sensors see      */
+/* ------------------------------------------------------------------ */
+function CaptureView({ t }: { t: number }) {
+  const all = CAPTURE_LOG.filter((e) => e.t <= t);
+  const seen = all.slice().reverse().slice(0, 6);
+  const frac = capturedFraction(t);
+  const points = Math.round(frac * 1_846_000);
+  const scanning = t < HVAC.insulation[1] + 0.5;
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <h1>Spatial capture</h1>
+          <div className="muted small">Level 5 · Room 5.04 · Mechanical and electrical ceiling void</div>
+        </div>
+        <span className={`sync ${scanning ? '' : 'on'}`}>
+          {scanning ? (
+            <>
+              <span className="scan-dot" /> Capturing
+            </>
+          ) : (
+            <>
+              <I.check /> Capture complete
+            </>
+          )}
+        </span>
+      </div>
+      <div className="sources">
+        <span><I.wearable /> Helmet cam H-27 front</span>
+        <span><I.wearable /> Helmet cam H-27 rear</span>
+        <span><I.camera /> CAM 05-04A / B</span>
+        <span><I.sensor /> LiDAR S5-2</span>
+      </div>
+      <div className="kpis">
+        <div className="kpi">
+          <div className="kpi-label">Points captured</div>
+          <div className="kpi-value mono">{points.toLocaleString('en-GB')}</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label">Ceiling void mapped</div>
+          <div className="kpi-value">{Math.round(frac * 100)}%</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label">Elements recorded</div>
+          <div className="kpi-value">{all.length}</div>
+        </div>
+      </div>
+      <div className="feed-head">
+        <span>What SiteMind is seeing</span>
+        <span className="muted small">Newest first</span>
+      </div>
+      <ul className="caplog">
+        <AnimatePresence initial={false}>
+          {seen.map((e, i) => (
+            <motion.li
+              key={e.t}
+              layout
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+              className={`cap-entry ${i === 0 && t - e.t < 3 ? 'fresh' : ''}`}
+            >
+              <div className="cap-top">
+                <span className={`trade trade-${e.trade.toLowerCase()}`}>{e.trade}</span>
+                <span className="cap-title">{e.title}</span>
+                <span className="mono muted small">{clockAt(e.t)}</span>
+              </div>
+              <div className="cap-text">{e.text}</div>
+              <div className="muted small cap-src">
+                <I.camera /> {e.source}
+              </div>
+            </motion.li>
+          ))}
+        </AnimatePresence>
+      </ul>
+    </>
   );
 }

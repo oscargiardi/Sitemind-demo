@@ -1,9 +1,10 @@
 # SiteMind — interactive 3D product demonstration
 
-Three synchronized panels driven by one simulated timeline (`src/sim`):
+Three synchronized panels driven by one simulated 95-second timeline (`src/sim`):
 
 - **Left** – connected construction site (React Three Fiber): drones, cameras, sensors and wearables sending live data.
 - **Middle** – close-up cartoon scenes: missing hard hat and exclusion-zone breach (Level 14), trip hazard (L7 Room 8), timber flooring progress (L9 Room 12).
+- **HVAC capture (final scene, Level 5 Room 5.04)** – the left panel becomes an overview of the room (mechanic on a scissor lift, ceiling cameras, LiDAR and the rear helmet camera building a point-cloud model of the ceiling void), the middle panel is the mechanic's helmet POV while installing hangers, duct, spigot and insulation, and the right panel shows a plain-language capture log in HVAC and electrical terms.
 - **Right** – the SiteMind application (React + CSS + Framer Motion): live alerts, activity feed, site overview and the auto-updating programme.
 
 ```bash
