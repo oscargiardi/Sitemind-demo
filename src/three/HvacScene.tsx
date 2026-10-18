@@ -20,7 +20,7 @@ const OPEN = { x0: -1.8, x1: 1.8, z0: -1.8, z1: 1.2 }; // tiles lifted here
 const LIFT: [number, number, number] = [0, 0, 1.0];
 /** extra storey height so the work zone reads clearly; ceiling content is modelled at the
  *  original heights and lifted by RAISE as a group */
-const RAISE = 1.0;
+const RAISE = 1.6;
 const PLATFORM_Y = 1.3 + RAISE;
 const HANGER_Z = { a: -0.8, b: 0.4 };
 const SPIGOT_Z = -0.2;
@@ -168,14 +168,14 @@ export function capturedFraction(t: number) {
   return n / CLOUD.count;
 }
 
-function PointCloud({ persp, size, alpha = 0.85 }: { persp: boolean; size: number; alpha?: number }) {
+function PointCloud({ persp, size, alpha = 0.85, fresh = 0.95 }: { persp: boolean; size: number; alpha?: number; fresh?: number }) {
   const gl = useThree((s) => s.gl);
   const mat = useMemo(
     () =>
       new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
-        uniforms: { uT: { value: 0 }, uSize: { value: size }, uPersp: { value: persp ? 1 : 0 }, uDpr: { value: 1 }, uAlpha: { value: alpha } },
+        uniforms: { uT: { value: 0 }, uSize: { value: size }, uPersp: { value: persp ? 1 : 0 }, uDpr: { value: 1 }, uAlpha: { value: alpha }, uFresh: { value: fresh } },
         vertexShader: /* glsl */ `
           attribute float aT;
           uniform float uT; uniform float uSize; uniform float uPersp; uniform float uDpr;
@@ -191,15 +191,15 @@ function PointCloud({ persp, size, alpha = 0.85 }: { persp: boolean; size: numbe
           }`,
         fragmentShader: /* glsl */ `
           varying float vK;
-          uniform float uAlpha;
+          uniform float uAlpha; uniform float uFresh;
           void main() {
             vec2 d = gl_PointCoord - 0.5;
             if (dot(d, d) > 0.25) discard;
             vec3 col = mix(vec3(1.0), vec3(0.0, 0.78, 0.72), vK);
-            gl_FragColor = vec4(col, mix(0.95, uAlpha, vK));
+            gl_FragColor = vec4(col, mix(uFresh, uAlpha, vK));
           }`,
       }),
-    [persp, size, alpha],
+    [persp, size, alpha, fresh],
   );
   const geo = useMemo(() => {
     const g = new THREE.BufferGeometry();
@@ -258,7 +258,7 @@ function ScissorLift({ rails = true }: { rails?: boolean }) {
       )}
       {[0.38, -0.38].map((z) => (
         <group key={z}>
-          {[0.55, 1.0, 1.45, 1.9].map((y) => (
+          {Array.from({ length: Math.floor((PLATFORM_Y - 0.4) / 0.45) }, (_, i) => 0.55 + i * 0.45).map((y) => (
             <group key={y}>
               <Box p={[0, y, z]} s={[1.35, 0.06, 0.05]} r={[0, 0, 0.42]} c="#9aa4ae" />
               <Box p={[0, y, z]} s={[1.35, 0.06, 0.05]} r={[0, 0, -0.42]} c="#9aa4ae" />
@@ -479,7 +479,7 @@ function mechanicPose(t: number): Pose {
 
 function Mechanic() {
   return (
-    <Worker pose={mechanicPose} vest="#ff7a00" helmet={C.yellow} scale={1.25} skin={C.skin2}>
+    <Worker pose={mechanicPose} vest="#ff7a00" helmet={C.yellow} scale={1.3} skin={C.skin2}>
       {/* rear-facing helmet camera */}
       <group position={[0, 1.02, -0.17]}>
         <Box p={[0, 0, 0]} s={[0.1, 0.07, 0.06]} c="#1a1f26" />
@@ -578,10 +578,10 @@ function OverviewWorld() {
   return (
     <>
       <Lights shadowSize={7} target={[0, 1.5, 0]} />
-      <FitOrtho target={[0, 2.15, 0]} dir={[1, 0.55, 1.15]} fitW={10.6} fitH={9.5} sway={0.03} />
+      <FitOrtho target={[0, 2.5, 0]} dir={[1, 0.55, 1.15]} fitW={10.8} fitH={11.5} sway={0.03} />
       <Room view="overview" />
       <Mechanic />
-      <PointCloud persp={false} size={2.4} alpha={0.5} />
+      <PointCloud persp={false} size={2.0} alpha={0.22} fresh={0.6} />
       <MechanicMarker />
       <AutoShadows />
     </>
