@@ -18,7 +18,10 @@ const DUCT_X = 0.4;
 const DUCT_Y = 3.1;
 const OPEN = { x0: -1.8, x1: 1.8, z0: -1.8, z1: 1.2 }; // tiles lifted here
 const LIFT: [number, number, number] = [0, 0, 1.0];
-const PLATFORM_Y = 1.3;
+/** extra storey height so the work zone reads clearly; ceiling content is modelled at the
+ *  original heights and lifted by RAISE as a group */
+const RAISE = 1.0;
+const PLATFORM_Y = 1.3 + RAISE;
 const HANGER_Z = { a: -0.8, b: 0.4 };
 const SPIGOT_Z = -0.2;
 const DIFFUSER: [number, number, number] = [1.2, GRID_Y, -0.2];
@@ -148,7 +151,7 @@ function buildCloud() {
         const p = [(r() - 0.5) * sx, (r() - 0.5) * sy, (r() - 0.5) * sz];
         p[axis] = (r() < 0.5 ? -0.5 : 0.5) * b.s[axis];
         const x = b.c[0] + p[0];
-        const y = b.c[1] + p[1];
+        const y = b.c[1] + p[1] + RAISE;
         const z = b.c[2] + p[2];
         pos.push(x, y, z);
         at.push(it.sweep ? it.t + ((x + 2.2) / 4.4) * 1.6 + r() * 0.25 : it.t - 0.4 + r() * 0.9);
@@ -255,10 +258,12 @@ function ScissorLift({ rails = true }: { rails?: boolean }) {
       )}
       {[0.38, -0.38].map((z) => (
         <group key={z}>
-          <Box p={[0, 0.55, z]} s={[1.35, 0.06, 0.05]} r={[0, 0, 0.42]} c="#9aa4ae" />
-          <Box p={[0, 0.55, z]} s={[1.35, 0.06, 0.05]} r={[0, 0, -0.42]} c="#9aa4ae" />
-          <Box p={[0, 1.0, z]} s={[1.35, 0.06, 0.05]} r={[0, 0, 0.42]} c="#9aa4ae" />
-          <Box p={[0, 1.0, z]} s={[1.35, 0.06, 0.05]} r={[0, 0, -0.42]} c="#9aa4ae" />
+          {[0.55, 1.0, 1.45, 1.9].map((y) => (
+            <group key={y}>
+              <Box p={[0, y, z]} s={[1.35, 0.06, 0.05]} r={[0, 0, 0.42]} c="#9aa4ae" />
+              <Box p={[0, y, z]} s={[1.35, 0.06, 0.05]} r={[0, 0, -0.42]} c="#9aa4ae" />
+            </group>
+          ))}
         </group>
       ))}
       <Box p={[0, PLATFORM_Y - 0.04, 0]} s={[1.6, 0.08, 0.95]} c="#ffb000" />
@@ -310,7 +315,7 @@ function Hanger({ z, win, existing }: { z: number; win?: [number, number]; exist
   );
 }
 
-const DUCT_REST: [number, number, number] = [2.3, 0.18, 0.2];
+const DUCT_REST: [number, number, number] = [2.3, 0.18 - RAISE, 0.2];
 function NewDuct() {
   const g = useRef<THREE.Group>(null!);
   const flange = useRef<THREE.Group>(null!);
@@ -503,16 +508,17 @@ function Room({ view }: { view: View }) {
       {/* floor + walls (cutaway in overview) */}
       <Box p={[0, -0.1, 0]} s={[8, 0.2, 6]} c="#cfcac0" />
       <Box p={[0, 0.002, 0]} s={[7.96, 0.004, 5.96]} c="#d9d4ca" />
-      <Box p={[0, SLAB_Y / 2, -3.05]} s={[8, SLAB_Y, 0.1]} c="#ecebe6" />
-      <Box p={[-4.05, SLAB_Y / 2, 0]} s={[0.1, SLAB_Y, 6.2]} c="#e4e1da" />
+      <Box p={[0, (SLAB_Y + RAISE) / 2, -3.05]} s={[8, SLAB_Y + RAISE, 0.1]} c="#ecebe6" />
+      <Box p={[-4.05, (SLAB_Y + RAISE) / 2, 0]} s={[0.1, SLAB_Y + RAISE, 6.2]} c="#e4e1da" />
       <Box p={[-3.99, 1.3, -1.4]} s={[0.02, 1.0, 1.4]} c="#a9d6ef" />
       {view === 'pov' && (
         <>
-          <Box p={[0, SLAB_Y + 0.1, 0]} s={[8, 0.2, 6]} c="#b7b2a9" />
-          <Box p={[4.05, SLAB_Y / 2, 0]} s={[0.1, SLAB_Y, 6.2]} c="#e4e1da" />
-          <Box p={[0, SLAB_Y / 2, 3.05]} s={[8, SLAB_Y, 0.1]} c="#ecebe6" />
+          <Box p={[0, SLAB_Y + RAISE + 0.1, 0]} s={[8, 0.2, 6]} c="#b7b2a9" />
+          <Box p={[4.05, (SLAB_Y + RAISE) / 2, 0]} s={[0.1, SLAB_Y + RAISE, 6.2]} c="#e4e1da" />
+          <Box p={[0, (SLAB_Y + RAISE) / 2, 3.05]} s={[8, SLAB_Y + RAISE, 0.1]} c="#ecebe6" />
         </>
       )}
+      <group position={[0, RAISE, 0]}>
       <CeilingGrid view={view} />
       {/* diffuser */}
       <group position={DIFFUSER}>
@@ -545,6 +551,10 @@ function Room({ view }: { view: View }) {
       <NewDuct />
       <Spigot />
       <Insulation />
+      <CeilingCam p={[-3.7, GRID_Y - 0.05, -2.7]} aim={[0.3, 3.0, -0.2]} />
+      <CeilingCam p={[3.7, GRID_Y - 0.05, -2.7]} aim={[0.2, 3.0, 0.2]} />
+      <Lidar />
+      </group>
       {/* lifted tiles + kit on the floor */}
       <group position={[-2.6, 0, 1.9]}>
         {[0, 1, 2, 3, 4].map((i) => (
@@ -557,10 +567,6 @@ function Room({ view }: { view: View }) {
         <meshStandardMaterial color="#e6e1d6" />
       </mesh>
       {view === 'overview' && <ScissorLift />}
-      {/* sensing */}
-      <CeilingCam p={[-3.7, GRID_Y - 0.05, -2.7]} aim={[0.3, 3.0, -0.2]} />
-      <CeilingCam p={[3.7, GRID_Y - 0.05, -2.7]} aim={[0.2, 3.0, 0.2]} />
-      <Lidar />
     </group>
   );
 }
@@ -571,8 +577,8 @@ function Room({ view }: { view: View }) {
 function OverviewWorld() {
   return (
     <>
-      <Lights shadowSize={7} target={[0, 1, 0]} />
-      <FitOrtho target={[0.15, 1.85, 0.6]} dir={[1, 0.5, 1.15]} fitW={5.8} fitH={6} sway={0.04} />
+      <Lights shadowSize={7} target={[0, 1.5, 0]} />
+      <FitOrtho target={[0, 2.15, 0]} dir={[1, 0.55, 1.15]} fitW={10.6} fitH={9.5} sway={0.03} />
       <Room view="overview" />
       <Mechanic />
       <PointCloud persp={false} size={2.4} alpha={0.5} />
@@ -609,13 +615,14 @@ const LOOK: { t: number; p: [number, number, number] }[] = [
   { t: 95, p: [0.2, 2.9, -1.9] },
 ];
 function lookAtTime(t: number, out: THREE.Vector3) {
+  // targets are authored at the original ceiling height
   let i = 0;
   while (i < LOOK.length - 2 && LOOK[i + 1].t <= t) i++;
   const a = LOOK[i];
   const b = LOOK[i + 1];
   const k = Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t)));
   const e = k * k * (3 - 2 * k);
-  return out.set(a.p[0] + (b.p[0] - a.p[0]) * e, a.p[1] + (b.p[1] - a.p[1]) * e, a.p[2] + (b.p[2] - a.p[2]) * e);
+  return out.set(a.p[0] + (b.p[0] - a.p[0]) * e, a.p[1] + (b.p[1] - a.p[1]) * e + RAISE, a.p[2] + (b.p[2] - a.p[2]) * e);
 }
 
 function PovRig() {
@@ -711,7 +718,7 @@ function CaptureChips() {
   return (
     <>
       {ITEMS.map((it) => (
-        <Html key={it.id} position={it.at} center zIndexRange={[20, 10]} style={{ pointerEvents: 'none' }}>
+        <Html key={it.id} position={[it.at[0], it.at[1] + RAISE, it.at[2]]} center zIndexRange={[20, 10]} style={{ pointerEvents: 'none' }}>
           <ChipEl t0={it.t} label={it.label} />
         </Html>
       ))}
