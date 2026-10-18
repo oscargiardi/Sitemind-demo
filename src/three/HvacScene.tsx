@@ -165,14 +165,14 @@ export function capturedFraction(t: number) {
   return n / CLOUD.count;
 }
 
-function PointCloud({ persp, size }: { persp: boolean; size: number }) {
+function PointCloud({ persp, size, alpha = 0.85 }: { persp: boolean; size: number; alpha?: number }) {
   const gl = useThree((s) => s.gl);
   const mat = useMemo(
     () =>
       new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
-        uniforms: { uT: { value: 0 }, uSize: { value: size }, uPersp: { value: persp ? 1 : 0 }, uDpr: { value: 1 } },
+        uniforms: { uT: { value: 0 }, uSize: { value: size }, uPersp: { value: persp ? 1 : 0 }, uDpr: { value: 1 }, uAlpha: { value: alpha } },
         vertexShader: /* glsl */ `
           attribute float aT;
           uniform float uT; uniform float uSize; uniform float uPersp; uniform float uDpr;
@@ -188,14 +188,15 @@ function PointCloud({ persp, size }: { persp: boolean; size: number }) {
           }`,
         fragmentShader: /* glsl */ `
           varying float vK;
+          uniform float uAlpha;
           void main() {
             vec2 d = gl_PointCoord - 0.5;
             if (dot(d, d) > 0.25) discard;
-            vec3 col = mix(vec3(1.0), vec3(0.18, 0.89, 0.82), vK);
-            gl_FragColor = vec4(col, 0.85);
+            vec3 col = mix(vec3(1.0), vec3(0.0, 0.78, 0.72), vK);
+            gl_FragColor = vec4(col, mix(0.95, uAlpha, vK));
           }`,
       }),
-    [persp, size],
+    [persp, size, alpha],
   );
   const geo = useMemo(() => {
     const g = new THREE.BufferGeometry();
@@ -411,7 +412,7 @@ function CeilingCam({ p, aim }: { p: [number, number, number]; aim: [number, num
       </mesh>
       <Box p={[0, 0.03, 0]} s={[0.3, 0.06, 0.3]} c="#f2f4f6" />
       <group quaternion={q}>
-        <ScanCone height={len} radius={len * 0.32} y={-len / 2} opacity={0.11} />
+        <ScanCone height={len} radius={len * 0.32} y={-len / 2} opacity={0.06} />
       </group>
     </group>
   );
@@ -441,6 +442,23 @@ function Lidar() {
   );
 }
 
+/** pulsing ring on the platform so the mechanic reads at a glance */
+function MechanicMarker() {
+  const m = useRef<THREE.Mesh>(null!);
+  const mat = useRef<THREE.MeshBasicMaterial>(null!);
+  useFrame(() => {
+    const k = (sim.wall * 0.8) % 1;
+    m.current.scale.setScalar(0.5 + k * 0.6);
+    mat.current.opacity = 0.9 * (1 - k);
+  });
+  return (
+    <mesh ref={m} position={[LIFT[0], PLATFORM_Y + 0.02, LIFT[2]]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={9} userData={{ noShadow: true }}>
+      <ringGeometry args={[0.8, 0.9, 40]} />
+      <meshBasicMaterial ref={mat} color="#ff9d2e" transparent depthWrite={false} />
+    </mesh>
+  );
+}
+
 /* the mechanic (overview only) */
 function mechanicPose(t: number): Pose {
   const base = { x: LIFT[0], z: LIFT[2], y: PLATFORM_Y, rot: Math.PI };
@@ -456,7 +474,7 @@ function mechanicPose(t: number): Pose {
 
 function Mechanic() {
   return (
-    <Worker pose={mechanicPose} vest={C.orange} helmet={C.white} scale={1.15} skin={C.skin2}>
+    <Worker pose={mechanicPose} vest="#ff7a00" helmet={C.yellow} scale={1.25} skin={C.skin2}>
       {/* rear-facing helmet camera */}
       <group position={[0, 1.02, -0.17]}>
         <Box p={[0, 0, 0]} s={[0.1, 0.07, 0.06]} c="#1a1f26" />
@@ -465,14 +483,14 @@ function Mechanic() {
           <meshStandardMaterial color="#000" emissive={C.teal} emissiveIntensity={1.4} />
         </mesh>
         <group rotation={[2.15, 0, 0]}>
-          <ScanCone height={2.3} radius={0.85} y={-1.15} opacity={0.14} />
+          <ScanCone height={2.3} radius={0.85} y={-1.15} opacity={0.07} />
         </group>
       </group>
       {/* front helmet camera (the middle panel's POV) */}
       <group position={[0, 1.02, 0.16]}>
         <Box p={[0, 0, 0]} s={[0.08, 0.06, 0.05]} c="#1a1f26" />
         <group rotation={[-2.15, 0, 0]}>
-          <ScanCone height={2.0} radius={0.8} y={-1.0} opacity={0.08} />
+          <ScanCone height={2.0} radius={0.8} y={-1.0} opacity={0.05} />
         </group>
       </group>
     </Worker>
@@ -554,10 +572,11 @@ function OverviewWorld() {
   return (
     <>
       <Lights shadowSize={7} target={[0, 1, 0]} />
-      <FitOrtho target={[0.2, 1.75, 0.1]} dir={[1, 0.95, 1.15]} fitW={10.2} fitH={10} sway={0.05} />
+      <FitOrtho target={[0.15, 1.85, 0.6]} dir={[1, 0.5, 1.15]} fitW={5.8} fitH={6} sway={0.04} />
       <Room view="overview" />
       <Mechanic />
-      <PointCloud persp={false} size={2.6} />
+      <PointCloud persp={false} size={2.4} alpha={0.5} />
+      <MechanicMarker />
       <AutoShadows />
     </>
   );
